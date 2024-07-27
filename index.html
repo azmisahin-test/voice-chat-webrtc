@@ -36,6 +36,7 @@
         let localStream;
         let remoteStream;
         let peerConnection;
+        let isCaller = false;
 
         const servers = {
             iceServers: [
@@ -65,11 +66,16 @@
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
-            push(ref(database, 'offers'), { sdp: offer.sdp, type: offer.type });
+            const offerRef = push(ref(database, 'offers'));
+            set(offerRef, { sdp: offer.sdp, type: offer.type });
+
+            isCaller = true;
+
+            offerRef.onDisconnect().remove();
 
             onChildAdded(ref(database, 'answers'), async (snapshot) => {
                 const answer = snapshot.val();
-                if (!peerConnection.currentRemoteDescription && answer) {
+                if (answer && !peerConnection.currentRemoteDescription) {
                     await peerConnection.setRemoteDescription(
                         new RTCSessionDescription(answer)
                     );
@@ -81,6 +87,38 @@
                 await peerConnection.addIceCandidate(candidate);
             });
         };
+
+        onChildAdded(ref(database, 'offers'), async (snapshot) => {
+            const offer = snapshot.val();
+            if (!isCaller && offer) {
+                peerConnection = new RTCPeerConnection(servers);
+                localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                peerConnection.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        push(ref(database, 'candidates'), event.candidate.toJSON());
+                    }
+                };
+
+                peerConnection.ontrack = (event) => {
+                    remoteAudio.srcObject = event.streams[0];
+                };
+
+                localStream.getTracks().forEach((track) => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                set(push(ref(database, 'answers')), { sdp: answer.sdp, type: answer.type });
+
+                onChildAdded(ref(database, 'candidates'), async (snapshot) => {
+                    const candidate = new RTCIceCandidate(snapshot.val());
+                    await peerConnection.addIceCandidate(candidate);
+                });
+            }
+        });
     </script>
 </body>
 
