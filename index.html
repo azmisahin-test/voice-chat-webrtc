@@ -120,7 +120,7 @@
             // Kullanıcı bağlantısı kesildiğinde veriyi kaldırma
             const onDisconnectRef = ref(database, 'users/' + userId);
             onDisconnectRef.onDisconnect().remove()
-                .catch(error => console.error('Failed to remove user on disconnect:', error));
+                .catch(error => console.error('Failed to set onDisconnect:', error));
 
             // Bağlı kullanıcı sayısını güncelleme
             onValue(ref(database, 'users'), (snapshot) => {
