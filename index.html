@@ -46,19 +46,31 @@
             ],
         };
 
+        const handleIceCandidateEvent = async (event) => {
+            if (event.candidate) {
+                push(ref(database, 'candidates'), event.candidate.toJSON());
+            }
+        };
+
+        const handleTrackEvent = (event) => {
+            remoteAudio.srcObject = event.streams[0];
+        };
+
+        const addIceCandidates = (peerConnection) => {
+            onChildAdded(ref(database, 'candidates'), async (snapshot) => {
+                const candidate = new RTCIceCandidate(snapshot.val());
+                if (peerConnection.remoteDescription) {
+                    await peerConnection.addIceCandidate(candidate);
+                }
+            });
+        };
+
         callButton.onclick = async () => {
             localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
             peerConnection = new RTCPeerConnection(servers);
 
-            peerConnection.onicecandidate = (event) => {
-                if (event.candidate) {
-                    push(ref(database, 'candidates'), event.candidate.toJSON());
-                }
-            };
-
-            peerConnection.ontrack = (event) => {
-                remoteAudio.srcObject = event.streams[0];
-            };
+            peerConnection.onicecandidate = handleIceCandidateEvent;
+            peerConnection.ontrack = handleTrackEvent;
 
             localStream.getTracks().forEach((track) => {
                 peerConnection.addTrack(track, localStream);
@@ -82,10 +94,7 @@
                 }
             });
 
-            onChildAdded(ref(database, 'candidates'), async (snapshot) => {
-                const candidate = new RTCIceCandidate(snapshot.val());
-                await peerConnection.addIceCandidate(candidate);
-            });
+            addIceCandidates(peerConnection);
         };
 
         onChildAdded(ref(database, 'offers'), async (snapshot) => {
@@ -94,15 +103,8 @@
                 peerConnection = new RTCPeerConnection(servers);
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                peerConnection.onicecandidate = (event) => {
-                    if (event.candidate) {
-                        push(ref(database, 'candidates'), event.candidate.toJSON());
-                    }
-                };
-
-                peerConnection.ontrack = (event) => {
-                    remoteAudio.srcObject = event.streams[0];
-                };
+                peerConnection.onicecandidate = handleIceCandidateEvent;
+                peerConnection.ontrack = handleTrackEvent;
 
                 localStream.getTracks().forEach((track) => {
                     peerConnection.addTrack(track, localStream);
@@ -113,10 +115,7 @@
                 await peerConnection.setLocalDescription(answer);
                 set(push(ref(database, 'answers')), { sdp: answer.sdp, type: answer.type });
 
-                onChildAdded(ref(database, 'candidates'), async (snapshot) => {
-                    const candidate = new RTCIceCandidate(snapshot.val());
-                    await peerConnection.addIceCandidate(candidate);
-                });
+                addIceCandidates(peerConnection);
             }
         });
     </script>
