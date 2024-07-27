@@ -10,9 +10,78 @@
     <h1>Voice Chat</h1>
     <audio id="remoteAudio" autoplay></audio>
     <button id="callButton">Start a Conversation</button>
-    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.6.8/firebase-database.js"></script>
-    <script src="script.js"></script>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyDhgqq7aq0j60NhGRDQGkgnvC1uuyMorVU",
+            authDomain: "voice-chat-797eb.firebaseapp.com",
+            projectId: "voice-chat-797eb",
+            databaseURL: "https://voice-chat-797eb-default-rtdb.firebaseio.com/",
+            storageBucket: "voice-chat-797eb.appspot.com",
+            messagingSenderId: "815348752880",
+            appId: "1:815348752880:web:a9e7243ea63e419c7dfd35",
+            measurementId: "G-GBT9F23WEL"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+
+        const callButton = document.getElementById("callButton");
+        const remoteAudio = document.getElementById("remoteAudio");
+        let localStream;
+        let remoteStream;
+        let peerConnection;
+
+        const servers = {
+            iceServers: [
+                {
+                    urls: "stun:stun.l.google.com:19302",
+                },
+            ],
+        };
+
+        callButton.onclick = async () => {
+            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            peerConnection = new RTCPeerConnection(servers);
+
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    push(ref(database, 'candidates'), event.candidate.toJSON());
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                remoteAudio.srcObject = event.streams[0];
+            };
+
+            localStream.getTracks().forEach((track) => {
+                peerConnection.addTrack(track, localStream);
+            });
+
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            push(ref(database, 'offers'), { sdp: offer.sdp, type: offer.type });
+
+            onChildAdded(ref(database, 'answers'), async (snapshot) => {
+                const answer = snapshot.val();
+                if (!peerConnection.currentRemoteDescription && answer) {
+                    await peerConnection.setRemoteDescription(
+                        new RTCSessionDescription(answer)
+                    );
+                }
+            });
+
+            onChildAdded(ref(database, 'candidates'), async (snapshot) => {
+                const candidate = new RTCIceCandidate(snapshot.val());
+                await peerConnection.addIceCandidate(candidate);
+            });
+        };
+    </script>
 </body>
 
 </html>
