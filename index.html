@@ -3,7 +3,14 @@
 
 <head>
     <title>Voice Chat</title>
-    <link rel="stylesheet" type="text/css" href="style.css">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
     <script>
         if ('serviceWorker' in navigator) {
             navigator.serviceWorker.register('service-worker.js').then((registration) => {
@@ -97,7 +104,7 @@
             const userRef = ref(database, 'users/' + userId);
 
             // Firebase Realtime Database'de veriyi set etme
-            userRef.set(true)
+            set(userRef, true)
                 .then(() => updateStatus('Connected'))
                 .catch(error => updateStatus('Error connecting: ' + error.message));
 
@@ -112,7 +119,6 @@
                 updateUserCount(userCount);
             });
         };
-
 
         const userId = 'user_' + Math.random().toString(36).substring(2, 15);
         handleUserConnection();
