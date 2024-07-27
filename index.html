@@ -118,7 +118,8 @@
                 .catch(error => updateStatus('Error connecting: ' + error.message));
 
             // Kullanıcı bağlantısı kesildiğinde veriyi kaldırma
-            userRef.onDisconnect().remove()
+            const onDisconnectRef = ref(database, 'users/' + userId);
+            onDisconnectRef.onDisconnect().remove()
                 .catch(error => console.error('Failed to remove user on disconnect:', error));
 
             // Bağlı kullanıcı sayısını güncelleme
