@@ -12,7 +12,7 @@
     <button id="callButton">Start a Conversation</button>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, set, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+        import { getDatabase, ref, push, onChildAdded, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDhgqq7aq0j60NhGRDQGkgnvC1uuyMorVU",
@@ -34,6 +34,7 @@
         let peerConnection;
         let isCaller = false;
         let offerRef;
+        let answerRef;
 
         const servers = {
             iceServers: [
@@ -80,8 +81,13 @@
 
             isCaller = true;
 
-            // Add onDisconnect to remove the offer when the client disconnects
-            offerRef.onDisconnect().remove();
+            // Clean up when page is unloaded or user disconnects
+            window.addEventListener('beforeunload', () => {
+                if (isCaller && offerRef) {
+                    remove(offerRef);
+                }
+                remove(ref(database, 'candidates'));
+            });
 
             onChildAdded(ref(database, 'answers'), async (snapshot) => {
                 const answer = snapshot.val();
@@ -111,7 +117,8 @@
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
-                set(push(ref(database, 'answers')), { sdp: answer.sdp, type: answer.type });
+                answerRef = push(ref(database, 'answers'));
+                set(answerRef, { sdp: answer.sdp, type: answer.type });
 
                 addIceCandidates(peerConnection);
             }
