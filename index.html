@@ -22,11 +22,9 @@
     <button id="callButton">Start a Conversation</button>
     <p id="version">Version: <span id="versionNumber"></span></p>
     <script type="module">
-        // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+        import { getDatabase, ref, push, onChildAdded, set, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDhgqq7aq0j60NhGRDQGkgnvC1uuyMorVU",
             authDomain: "voice-chat-797eb.firebaseapp.com",
@@ -38,7 +36,6 @@
             measurementId: "G-GBT9F23WEL"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
 
@@ -51,10 +48,7 @@
         let offerRef;
         let answerRef;
 
-        // Version number
         const VERSION = "1.0.0";
-
-        // Display the version number
         versionNumber.textContent = VERSION;
 
         const servers = {
@@ -67,11 +61,13 @@
 
         const handleIceCandidateEvent = async (event) => {
             if (event.candidate) {
+                console.log('New ICE candidate:', event.candidate.toJSON());
                 push(ref(database, 'candidates'), event.candidate.toJSON());
             }
         };
 
         const handleTrackEvent = (event) => {
+            console.log('Received remote stream');
             remoteAudio.srcObject = event.streams[0];
         };
 
@@ -79,53 +75,16 @@
             onChildAdded(ref(database, 'candidates'), async (snapshot) => {
                 const candidate = new RTCIceCandidate(snapshot.val());
                 if (peerConnection.remoteDescription) {
+                    console.log('Adding ICE candidate');
                     await peerConnection.addIceCandidate(candidate);
                 }
             });
         };
 
         callButton.onclick = async () => {
-            localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-            peerConnection = new RTCPeerConnection(servers);
-
-            peerConnection.onicecandidate = handleIceCandidateEvent;
-            peerConnection.ontrack = handleTrackEvent;
-
-            localStream.getTracks().forEach((track) => {
-                peerConnection.addTrack(track, localStream);
-            });
-
-            const offer = await peerConnection.createOffer();
-            await peerConnection.setLocalDescription(offer);
-            offerRef = push(ref(database, 'offers'));
-            set(offerRef, { sdp: offer.sdp, type: offer.type });
-
-            isCaller = true;
-
-            window.addEventListener('beforeunload', () => {
-                if (isCaller && offerRef) {
-                    remove(offerRef);
-                }
-                remove(ref(database, 'candidates'));
-            });
-
-            onChildAdded(ref(database, 'answers'), async (snapshot) => {
-                const answer = snapshot.val();
-                if (answer && !peerConnection.currentRemoteDescription) {
-                    await peerConnection.setRemoteDescription(
-                        new RTCSessionDescription(answer)
-                    );
-                }
-            });
-
-            addIceCandidates(peerConnection);
-        };
-
-        onChildAdded(ref(database, 'offers'), async (snapshot) => {
-            const offer = snapshot.val();
-            if (!isCaller && offer) {
-                peerConnection = new RTCPeerConnection(servers);
+            try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                peerConnection = new RTCPeerConnection(servers);
 
                 peerConnection.onicecandidate = handleIceCandidateEvent;
                 peerConnection.ontrack = handleTrackEvent;
@@ -134,18 +93,63 @@
                     peerConnection.addTrack(track, localStream);
                 });
 
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
-                const answer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(answer);
-                answerRef = push(ref(database, 'answers'));
-                set(answerRef, { sdp: answer.sdp, type: answer.type });
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+                offerRef = push(ref(database, 'offers'));
+                await set(offerRef, { sdp: offer.sdp, type: offer.type });
+
+                isCaller = true;
+
+                window.addEventListener('beforeunload', () => {
+                    if (isCaller && offerRef) {
+                        remove(offerRef).catch(error => console.error('Failed to remove offer:', error));
+                    }
+                    remove(ref(database, 'candidates')).catch(error => console.error('Failed to remove candidates:', error));
+                });
+
+                onChildAdded(ref(database, 'answers'), async (snapshot) => {
+                    const answer = snapshot.val();
+                    if (answer && !peerConnection.currentRemoteDescription) {
+                        console.log('Setting remote description with answer');
+                        await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                    }
+                });
 
                 addIceCandidates(peerConnection);
+            } catch (error) {
+                console.error('Error starting call:', error);
+            }
+        };
+
+        onChildAdded(ref(database, 'offers'), async (snapshot) => {
+            const offer = snapshot.val();
+            if (!isCaller && offer) {
+                try {
+                    peerConnection = new RTCPeerConnection(servers);
+                    localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                    peerConnection.onicecandidate = handleIceCandidateEvent;
+                    peerConnection.ontrack = handleTrackEvent;
+
+                    localStream.getTracks().forEach((track) => {
+                        peerConnection.addTrack(track, localStream);
+                    });
+
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+                    answerRef = push(ref(database, 'answers'));
+                    await set(answerRef, { sdp: answer.sdp, type: answer.type });
+
+                    addIceCandidates(peerConnection);
+                } catch (error) {
+                    console.error('Error setting up offer response:', error);
+                }
             }
         });
 
         window.addEventListener('beforeunload', () => {
-            remove(ref(database, 'candidates'));
+            remove(ref(database, 'candidates')).catch(error => console.error('Failed to remove candidates on unload:', error));
         });
     </script>
 </body>
