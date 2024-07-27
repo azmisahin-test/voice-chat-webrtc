@@ -96,13 +96,16 @@
         const handleUserConnection = () => {
             const userRef = ref(database, 'users/' + userId);
 
+            // Firebase Realtime Database'de veriyi set etme
             userRef.set(true)
                 .then(() => updateStatus('Connected'))
-                .catch(error => updateStatus('Error connecting'));
+                .catch(error => updateStatus('Error connecting: ' + error.message));
 
+            // Kullanıcı bağlantısı kesildiğinde veriyi kaldırma
             userRef.onDisconnect().remove()
                 .catch(error => console.error('Failed to remove user on disconnect:', error));
 
+            // Bağlı kullanıcı sayısını güncelleme
             onValue(ref(database, 'users'), (snapshot) => {
                 const users = snapshot.val();
                 const userCount = users ? Object.keys(users).length : 0;
