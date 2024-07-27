@@ -112,14 +112,13 @@
         const handleUserConnection = () => {
             const userRef = ref(database, 'users/' + userId);
 
-            // Firebase Realtime Database'de veriyi set etme
+            // Kullanıcı bağlantısı sağlandığında veriyi set etme
             set(userRef, true)
                 .then(() => updateStatus('Connected'))
                 .catch(error => updateStatus('Error connecting: ' + error.message));
 
             // Kullanıcı bağlantısı kesildiğinde veriyi kaldırma
-            const onDisconnectRef = ref(database, 'users/' + userId);
-            onDisconnectRef.onDisconnect().remove()
+            userRef.onDisconnect().remove()
                 .then(() => console.log('onDisconnect handler set'))
                 .catch(error => console.error('Failed to set onDisconnect:', error));
 
