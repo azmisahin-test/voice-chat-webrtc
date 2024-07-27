@@ -13,7 +13,7 @@
     <script type="module">
         // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, set } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+        import { getDatabase, ref, push, onChildAdded, set, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
         // Your web app's Firebase configuration
         const firebaseConfig = {
@@ -34,7 +34,6 @@
         const callButton = document.getElementById("callButton");
         const remoteAudio = document.getElementById("remoteAudio");
         let localStream;
-        let remoteStream;
         let peerConnection;
         let isCaller = false;
 
@@ -83,7 +82,10 @@
 
             isCaller = true;
 
-            offerRef.onDisconnect().remove();
+            // Remove offer from Firebase when disconnected
+            offerRef.onDisconnect(() => {
+                remove(offerRef);
+            });
 
             onChildAdded(ref(database, 'answers'), async (snapshot) => {
                 const answer = snapshot.val();
