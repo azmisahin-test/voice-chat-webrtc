@@ -117,11 +117,6 @@
                 .then(() => updateStatus('Connected'))
                 .catch(error => updateStatus('Error connecting: ' + error.message));
 
-            // Kullanıcı bağlantısı kesildiğinde veriyi kaldırma
-            userRef.onDisconnect().remove()
-                .then(() => console.log('onDisconnect handler set'))
-                .catch(error => console.error('Failed to set onDisconnect:', error));
-
             // Bağlı kullanıcı sayısını güncelleme
             onValue(ref(database, 'users'), (snapshot) => {
                 const users = snapshot.val();
