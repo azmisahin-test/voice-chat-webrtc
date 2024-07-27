@@ -11,11 +11,9 @@
     <audio id="remoteAudio" autoplay></audio>
     <button id="callButton">Start a Conversation</button>
     <script type="module">
-        // Import the functions you need from the SDKs you need
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
         import { getDatabase, ref, push, onChildAdded, set, remove } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
-        // Your web app's Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyDhgqq7aq0j60NhGRDQGkgnvC1uuyMorVU",
             authDomain: "voice-chat-797eb.firebaseapp.com",
@@ -27,7 +25,6 @@
             measurementId: "G-GBT9F23WEL"
         };
 
-        // Initialize Firebase
         const app = initializeApp(firebaseConfig);
         const database = getDatabase(app);
 
@@ -36,6 +33,7 @@
         let localStream;
         let peerConnection;
         let isCaller = false;
+        let offerRef;
 
         const servers = {
             iceServers: [
@@ -77,15 +75,13 @@
 
             const offer = await peerConnection.createOffer();
             await peerConnection.setLocalDescription(offer);
-            const offerRef = push(ref(database, 'offers'));
+            offerRef = push(ref(database, 'offers'));
             set(offerRef, { sdp: offer.sdp, type: offer.type });
 
             isCaller = true;
 
-            // Remove offer from Firebase when disconnected
-            offerRef.onDisconnect(() => {
-                remove(offerRef);
-            });
+            // Add onDisconnect to remove the offer when the client disconnects
+            offerRef.onDisconnect().remove();
 
             onChildAdded(ref(database, 'answers'), async (snapshot) => {
                 const answer = snapshot.val();
@@ -119,6 +115,11 @@
 
                 addIceCandidates(peerConnection);
             }
+        });
+
+        // Clean up candidates on window unload
+        window.addEventListener('beforeunload', () => {
+            remove(ref(database, 'candidates'));
         });
     </script>
 </body>
