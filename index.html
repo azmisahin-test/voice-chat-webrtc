@@ -41,7 +41,7 @@
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-app.js";
-        import { getDatabase, ref, push, onChildAdded, set, remove, onValue } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
+        import { get, ref, set, push, getDatabase, onChildAdded, remove, onValue, onChildRemoved } from "https://www.gstatic.com/firebasejs/10.12.4/firebase-database.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyDhgqq7aq0j60NhGRDQGkgnvC1uuyMorVU",
@@ -71,7 +71,6 @@
         const VERSION = "1.0.0";
         versionNumber.textContent = VERSION;
 
-        // Peer connection definitions.
         const configuration = {
             iceServers: [
                 {
@@ -89,7 +88,11 @@
         const handleIceCandidateEvent = async (event) => {
             if (event.candidate) {
                 console.log('New ICE candidate:', event.candidate.toJSON());
-                push(ref(database, 'candidates'), event.candidate.toJSON());
+                const candidateRef = ref(database, 'candidates/' + event.candidate.sdpMid + '_' + event.candidate.sdpMLineIndex);
+                const candidateSnapshot = await get(candidateRef);
+                if (!candidateSnapshot.exists()) {
+                    await set(candidateRef, event.candidate.toJSON());
+                }
             }
         };
 
@@ -101,6 +104,7 @@
         const addIceCandidates = (peerConnection) => {
             onChildAdded(ref(database, 'candidates'), async (snapshot) => {
                 const candidate = new RTCIceCandidate(snapshot.val());
+                console.log('New ICE candidate from database:', candidate);
                 if (peerConnection.remoteDescription) {
                     console.log('Adding ICE candidate');
                     await peerConnection.addIceCandidate(candidate);
@@ -128,6 +132,10 @@
                 const userCount = users ? Object.keys(users).length : 0;
                 updateUserCount(userCount);
             });
+
+            onChildRemoved(ref(database, 'users'), () => {
+                console.log('User removed from database');
+            });
         };
 
         const userId = 'user_' + Math.random().toString(36).substring(2, 15);
@@ -136,6 +144,7 @@
         callButton.onclick = async () => {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                console.log('Got local stream');
                 peerConnection = new RTCPeerConnection(configuration);
 
                 peerConnection.onicecandidate = handleIceCandidateEvent;
@@ -147,6 +156,7 @@
 
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
+                console.log('Created and set local offer');
                 offerRef = push(ref(database, 'offers'));
                 await set(offerRef, { sdp: offer.sdp, type: offer.type });
 
@@ -180,6 +190,7 @@
                 try {
                     peerConnection = new RTCPeerConnection(configuration);
                     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    console.log('Got local stream for answering');
 
                     peerConnection.onicecandidate = handleIceCandidateEvent;
                     peerConnection.ontrack = handleTrackEvent;
@@ -189,8 +200,10 @@
                     });
 
                     await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                    console.log('Set remote description with offer');
                     const answer = await peerConnection.createAnswer();
                     await peerConnection.setLocalDescription(answer);
+                    console.log('Created and set local answer');
                     answerRef = push(ref(database, 'answers'));
                     await set(answerRef, { sdp: answer.sdp, type: answer.type });
 
@@ -202,7 +215,17 @@
         });
 
         window.addEventListener('beforeunload', () => {
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            if (offerRef) {
+                remove(offerRef).catch(error => console.error('Failed to remove offer on unload:', error));
+            }
+            if (answerRef) {
+                remove(answerRef).catch(error => console.error('Failed to remove answer on unload:', error));
+            }
             remove(ref(database, 'candidates')).catch(error => console.error('Failed to remove candidates on unload:', error));
+            remove(ref(database, 'users/' + userId)).catch(error => console.error('Failed to remove user on unload:', error));
         });
     </script>
 </body>
