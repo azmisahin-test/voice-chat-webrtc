@@ -71,12 +71,19 @@
         const VERSION = "1.0.0";
         versionNumber.textContent = VERSION;
 
-        const servers = {
+        // Peer connection definitions.
+        const configuration = {
             iceServers: [
                 {
-                    urls: "stun:stun.l.google.com:19302",
-                },
-            ],
+                    urls: [
+                        'stun:stun.l.google.com:19302',
+                        'stun:stun1.l.google.com:19302',
+                        'stun:stun2.l.google.com:19302',
+                        'stun:stun3.l.google.com:19302',
+                        'stun:stun4.l.google.com:19302'
+                    ]
+                }
+            ]
         };
 
         const handleIceCandidateEvent = async (event) => {
@@ -112,12 +119,10 @@
         const handleUserConnection = () => {
             const userRef = ref(database, 'users/' + userId);
 
-            // Kullanıcı bağlantısı sağlandığında veriyi set etme
             set(userRef, true)
                 .then(() => updateStatus('Connected'))
                 .catch(error => updateStatus('Error connecting: ' + error.message));
 
-            // Bağlı kullanıcı sayısını güncelleme
             onValue(ref(database, 'users'), (snapshot) => {
                 const users = snapshot.val();
                 const userCount = users ? Object.keys(users).length : 0;
@@ -131,7 +136,7 @@
         callButton.onclick = async () => {
             try {
                 localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                peerConnection = new RTCPeerConnection(servers);
+                peerConnection = new RTCPeerConnection(configuration);
 
                 peerConnection.onicecandidate = handleIceCandidateEvent;
                 peerConnection.ontrack = handleTrackEvent;
@@ -173,7 +178,7 @@
             const offer = snapshot.val();
             if (!isCaller && offer) {
                 try {
-                    peerConnection = new RTCPeerConnection(servers);
+                    peerConnection = new RTCPeerConnection(configuration);
                     localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
                     peerConnection.onicecandidate = handleIceCandidateEvent;
