@@ -1,63 +1,68 @@
-const callButton = document.getElementById("callButton");
-const remoteAudio = document.getElementById("remoteAudio");
-let localStream;
-let remoteStream;
-let peerConnection;
+// script.js
 
-const servers = {
-  iceServers: [
-    {
-      urls: "stun:stun.l.google.com:19302",
-    },
-  ],
+const DefaultMediaStreamConstraints = {
+  audio: {
+    echoCancellation: true,   // Eko iptali etkin
+    noiseSuppression: true,   // Gürültü bastırma etkin
+    sampleRate: 44100         // Örnekleme frekansı
+  },
+  video: {
+    width: { ideal: 320 },   // Tercih edilen genişlik
+    height: { ideal: 180 },  // Tercih edilen yükseklik
+    frameRate: { ideal: 30 }, // Tercih edilen kare hızı
+    facingMode: 'user'        // Kullanıcıya bakan kamera (ön kamera)
+  }
 };
 
-// Firebase yapılandırması
-const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-  databaseURL: "https://YOUR_PROJECT_ID.firebaseio.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT_ID.appspot.com",
-  messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
-  appId: "YOUR_APP_ID",
-};
-firebase.initializeApp(firebaseConfig);
-const database = firebase.database();
+let isMediaStreamStarted = false; // Medya akışı başlatıldı mı kontrolü
 
-callButton.onclick = async () => {
-  localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-  peerConnection = new RTCPeerConnection(servers);
+/**
+ * Medya akışı başlatıcı fonksiyon. Kullanıcı tarafından belirtilen kısıtlamalar varsayılanlarla birleştirilir.
+ * @param {MediaStreamConstraints} [userConstraints={}] - Kullanıcı tarafından belirtilen medya kısıtlamaları.
+ * @returns {Promise<void>} - Başarı ya da hata durumuna göre bir promise döner.
+ */
+function initializeMediaStream(userConstraints = {}) {
+  if (isMediaStreamStarted) {
+    console.log('Medya akışı zaten başlatıldı!');
+    return; // Eğer medya akışı zaten başlatıldıysa bir daha başlatma
+  }
 
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      database.ref("candidates").push(event.candidate.toJSON());
-    }
+  // Varsayılan ve kullanıcı kısıtlamalarını birleştir
+  const constraints = {
+    audio: { ...DefaultMediaStreamConstraints.audio, ...userConstraints.audio },
+    video: { ...DefaultMediaStreamConstraints.video, ...userConstraints.video }
   };
 
-  peerConnection.ontrack = (event) => {
-    remoteAudio.srcObject = event.streams[0];
-  };
+  return navigator.mediaDevices.getUserMedia(constraints)
+    .then(onMediaStreamSuccess) // Medya akışı başarılı olduğunda tetiklenir
+    .catch(onMediaStreamError); // Medya akışı hatası olduğunda tetiklenir
+}
 
-  localStream.getTracks().forEach((track) => {
-    peerConnection.addTrack(track, localStream);
-  });
+/**
+ * Medya akışı başarıyla elde edildiğinde çalıştırılan callback fonksiyonu.
+ * @param {MediaStream} stream - Başarıyla alınan MediaStream nesnesi.
+ * @returns {void}
+ */
+function onMediaStreamSuccess(stream) {
 
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  database.ref("offers").push({ sdp: offer.sdp, type: offer.type });
+  const videoElement = document.createElement('video');
+  videoElement.srcObject = stream;
+  videoElement.autoplay = true;  // Otomatik oynat
+  videoElement.controls = true;  // Video kontrol düğmeleri eklendi
+  videoElement.muted = true;
 
-  database.ref("answers").on("child_added", async (snapshot) => {
-    const answer = snapshot.val();
-    if (!peerConnection.currentRemoteDescription && answer) {
-      await peerConnection.setRemoteDescription(
-        new RTCSessionDescription(answer)
-      );
-    }
-  });
+  document.getElementById('app').appendChild(videoElement);
+  console.log('Medya akışı başarıyla başlatıldı:', stream);
 
-  database.ref("candidates").on("child_added", async (snapshot) => {
-    const candidate = new RTCIceCandidate(snapshot.val());
-    await peerConnection.addIceCandidate(candidate);
-  });
-};
+  isMediaStreamStarted = true;  // Medya akışı başlatıldığını işaretle
+}
+
+/**
+ * Medya akışı başarısız olduğunda çalıştırılan callback fonksiyonu.
+ * @param {Error} error - Medya akışını alma sırasında oluşan hata.
+ * @returns {void}
+ */
+function onMediaStreamError(error) {
+  console.error('Medya akışı başlatılamadı:', error);
+  alert('Medya cihazlarına erişim sağlanamadı. Lütfen izin verdiğinizden emin olun.');
+}
