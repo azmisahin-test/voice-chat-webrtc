@@ -15,6 +15,7 @@ const DefaultMediaStreamConstraints = {
 };
 
 let isMediaStreamStarted = false; // Medya akışı başlatıldı mı kontrolü
+let localStream = null; // Yerel medya akışını sakla
 
 /**
  * Medya akışı başlatıcı fonksiyon. Kullanıcı tarafından belirtilen kısıtlamalar varsayılanlarla birleştirilir.
@@ -44,17 +45,21 @@ function initializeMediaStream(userConstraints = {}) {
  * @returns {void}
  */
 function onMediaStreamSuccess(stream) {
+  localStream = stream; // Yerel akışı sakla
 
   const videoElement = document.createElement('video');
   videoElement.srcObject = stream;
-  videoElement.autoplay = true;  // Otomatik oynat
-  videoElement.controls = true;  // Video kontrol düğmeleri eklendi
-  videoElement.muted = true;
+  videoElement.autoplay = true;
+  videoElement.controls = true;
+  videoElement.muted = true; // Kendi sesini duymaması için
 
   document.getElementById('app').appendChild(videoElement);
   console.log('Medya akışı başarıyla başlatıldı:', stream);
 
   isMediaStreamStarted = true;  // Medya akışı başlatıldığını işaretle
+
+  // Socket.IO ile sinyalleri gönder
+  socket.emit('signal', { type: 'stream', streamId: localStream.id });
 }
 
 /**
@@ -66,3 +71,9 @@ function onMediaStreamError(error) {
   console.error('Medya akışı başlatılamadı:', error);
   alert('Medya cihazlarına erişim sağlanamadı. Lütfen izin verdiğinizden emin olun.');
 }
+
+// Diğer kullanıcıdan gelen sinyalleri dinle
+socket.on('signal', (data) => {
+  console.log('Diğer kullanıcıdan sinyal alındı:', data);
+  // Burada gelen sinyalleri işleyin (örneğin, başka bir video öğesi ekleyerek)
+});
